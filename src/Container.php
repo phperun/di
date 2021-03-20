@@ -24,7 +24,13 @@ class Container implements ContainerInterface
     public function get(string $key): mixed
     {
         if ($this->pool->has($key)) {
-            return $this->pool->get($key);
+            $value = $this->pool->get($key);
+
+            if (is_callable($value)) {
+                return $value($this);
+            }
+
+            return $value;
         }
 
         return $this->resolver->resolve($key);
@@ -44,13 +50,17 @@ class Container implements ContainerInterface
 
     public function build(array $definitions): ContainerInterface
     {
-        // TODO: Implement build() method.
+        foreach ($definitions as $key => $value) {
+            $this->pool->set($key, $value);
+        }
+
         return $this;
     }
 
     public function invoke(string $class, string $method): mixed
     {
-        // TODO: Implement invoke() method.
-        return null;
+        $object = $this->get($class);
+
+        return $this->resolver->invoke($object, $method);
     }
 }

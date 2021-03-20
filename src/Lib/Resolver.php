@@ -19,8 +19,21 @@ class Resolver implements ResolverInterface
     public function resolve(string $key): mixed
     {
         $reflection = $this->createReflection($key);
+        $instance = $this->resolveClass($reflection);
+        $this->pool->set($key, $instance);
 
-        return $this->resolveClass($reflection);
+        return $instance;
+    }
+
+    public function invoke(object $object, string $method): mixed
+    {
+        $reflection = new \ReflectionMethod($object, $method);
+
+        $parameters = array_map(function ($parameter) {
+            return $this->resolveParameter($parameter);
+        }, $reflection->getParameters());
+
+        return $reflection->invokeArgs($object, $parameters);
     }
 
     protected function createReflection(string $key): \ReflectionClass
@@ -48,9 +61,7 @@ class Resolver implements ResolverInterface
         $type = $parameter->getType();
 
         if ($type && !$type->isBuiltin()) {
-            $reflection = $this->createReflection($type->getName());
-
-            return $this->resolveClass($reflection);
+            return $this->resolve($type->getName());
         }
 
         if ($parameter->isDefaultValueAvailable()) {
