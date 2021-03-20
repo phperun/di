@@ -1,0 +1,77 @@
+<?php
+
+
+namespace PHPerun\DI\Lib;
+
+
+use PHPerun\DI\Interfaces\PoolInterface;
+use PHPerun\DI\Interfaces\ResolverInterface;
+
+class Resolver implements ResolverInterface
+{
+    protected PoolInterface $pool;
+
+    public function __construct(PoolInterface $pool)
+    {
+        $this->pool = $pool;
+    }
+
+    public function resolve(string $key): mixed
+    {
+        $reflection = $this->createReflection($key);
+        $instance = $this->resolveClass($reflection);
+        $this->pool->set($key, $instance);
+
+        return $instance;
+    }
+
+    public function invoke(object $object, string $method): mixed
+    {
+        $reflection = new \ReflectionMethod($object, $method);
+
+        $parameters = array_map(function ($parameter) {
+            return $this->resolveParameter($parameter);
+        }, $reflection->getParameters());
+
+        return $reflection->invokeArgs($object, $parameters);
+    }
+
+    protected function createReflection(string $key): \ReflectionClass
+    {
+        return new \ReflectionClass($key);
+    }
+
+    protected function resolveClass(\ReflectionClass $reflection): mixed
+    {
+        $constructor = $reflection->getConstructor();
+
+        if (!$constructor) {
+            return $reflection->newInstance();
+        }
+
+        $parameters = array_map(function ($parameter) {
+            return $this->resolveParameter($parameter);
+        }, $constructor->getParameters());
+
+        return $reflection->newInstanceArgs($parameters);
+    }
+
+    protected function resolveParameter(\ReflectionParameter $parameter): mixed
+    {
+        $type = $parameter->getType();
+
+        if ($type && !$type->isBuiltin()) {
+            return $this->resolve($type->getName());
+        }
+
+        if ($parameter->isDefaultValueAvailable()) {
+            return $parameter->getDefaultValue();
+        }
+
+        if ($parameter->allowsNull()) {
+            return null;
+        }
+
+        return null;
+    }
+}
